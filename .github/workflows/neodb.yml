@@ -33,7 +33,7 @@ jobs:
         run: |
           # 定义需要同步的分类（移除 album）
           categories=("book" "movie" "tv" "game")
-          mkdir -p data/neodb
+          mkdir -p neodb
           for category in "${categories[@]}"; do
             local_file="data/neodb/${category}.json"
             if [ ! -f "$local_file" ]; then
@@ -63,7 +63,7 @@ jobs:
             echo "Remote count for ${category}: $remote_count, pages: $pages"
 
             # 读取本地数据的 count
-            local_file="data/neodb/${category}.json"
+            local_file="neodb/${category}.json"
             local_count=$(jq '.count // 0' "$local_file")
             echo "Local count for ${category}: $local_count"
 
@@ -98,7 +98,7 @@ jobs:
               fi
 
               # 确保目标目录存在，然后将合并后的 JSON 文件复制过去
-              mkdir -p data/neodb
+              mkdir -p neodb
               cp -f "${category}.json" "data/neodb/${category}.json"
             fi
           done
