@@ -35,7 +35,7 @@ jobs:
           categories=("book" "movie" "tv" "game")
           mkdir -p neodb
           for category in "${categories[@]}"; do
-            local_file="data/neodb/${category}.json"
+            local_file="neodb/${category}.json"
             if [ ! -f "$local_file" ]; then
               echo "Creating default JSON for category: $category"
               echo '{"data": [], "pages": 0, "count": 0}' > "$local_file"
