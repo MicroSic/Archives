@@ -91,15 +91,11 @@ jobs:
                   data: map(.data[]) | unique | sort_by(.created_time) | reverse,
                   pages: (map(.pages)[0]),
                   count: (map(.count)[0])
-                }' neodb/${category}/*.json > "${category}.json"
+                }' neodb/${category}/*.json > "neodb/${category}.json"
               else
                 # 如果 pages 为 0，则创建默认空数据文件
-                echo '{"data": [], "pages": 0, "count": 0}' > "${category}.json"
+                echo '{"data": [], "pages": 0, "count": 0}' > "neodb/${category}.json"
               fi
-
-              # 确保目标目录存在，然后将合并后的 JSON 文件复制过去
-              mkdir -p neodb
-              cp -f "${category}.json" "data/neodb/${category}.json"
             fi
           done
 
