@@ -1,116 +1,104 @@
 name: Sync NeoDB Data
 
-# 允许 GitHub Actions 拥有写入仓库的权限
 permissions:
   contents: write
 
 on:
   schedule:
-    - cron: "0 17 * * *"
+    - cron: "0 17 * * *"  # 每天 UTC+0 17点运行
   workflow_dispatch:
 
 jobs:
   neodb_sync:
-    name: Sync NeoDB Data for multiple categories
+    name: Sync NeoDB Data for All Types
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Check JQ
+      - name: Install jq if missing
         run: |
           if ! command -v jq &> /dev/null; then
-            echo "jq is not installed. Installing..."
             sudo apt-get update
             sudo apt-get install -y jq
-          else
-            echo "jq is already installed."
           fi
-          echo "WORK_DIR=$(pwd)" >> $GITHUB_ENV
 
-      - name: Ensure local JSON files exist
+      - name: Ensure local files exist
         run: |
-          # 定义需要同步的分类（移除 album）
           categories=("book" "movie" "tv" "game")
+          types=("complete" "progress" "wishlist")
           mkdir -p data/neodb
           for category in "${categories[@]}"; do
-            local_file="data/neodb/${category}.json"
-            if [ ! -f "$local_file" ]; then
-              echo "Creating default JSON for category: $category"
-              echo '{"data": [], "pages": 0, "count": 0}' > "$local_file"
-            fi
+            for type in "${types[@]}"; do
+              local_file="data/neodb/${category}_${type}.json"
+              if [ ! -f "$local_file" ]; then
+                echo "Creating default JSON: $local_file"
+                echo '{"data": [], "pages": 0, "count": 0}' > "$local_file"
+              fi
+            done
           done
 
-      - name: Sync Categories Data
+      - name: Sync all category/type combinations
         run: |
-          # 定义需要同步的分类（移除 album）
           categories=("book" "movie" "tv" "game")
+          types=("complete" "progress" "wishlist")
           UPDATED=0
 
           for category in "${categories[@]}"; do
-            echo "Processing category: $category"
+            for type in "${types[@]}"; do
+              echo "Syncing ${category}_${type}..."
 
-            # 下载该分类第一页数据，用于获取 count 和 pages
-            curl -s -X GET "https://neodb.social/api/me/shelf/complete?category=${category}&page=1" \
-              -H "accept: application/json" \
-              -H "Authorization: Bearer ${{ secrets.NEODB_ACCESS_TOKEN }}" \
-              -o "${category}1.json"
+              # 下载第一页数据
+              curl -s -X GET "https://neodb.social/api/me/shelf/${type}?category=${category}&page=1" \
+                -H "accept: application/json" \
+                -H "Authorization: Bearer ${{ secrets.NEODB_ACCESS_TOKEN }}" \
+                -o "${category}_${type}1.json"
 
-            # 提取远程数据的 count 和 pages, 如果为 null 则设为 0
-            remote_count=$(jq '.count // 0' "${category}1.json")
-            pages=$(jq '.pages // 0' "${category}1.json")
-            echo "Remote count for ${category}: $remote_count, pages: $pages"
+              # 提取远程数据的 count 和 pages
+              remote_count=$(jq '.count // 0' "${category}_${type}1.json")
+              pages=$(jq '.pages // 0' "${category}_${type}1.json")
 
-            # 读取本地数据的 count
-            local_file="data/neodb/${category}.json"
-            local_count=$(jq '.count // 0' "$local_file")
-            echo "Local count for ${category}: $local_count"
+              local_file="data/neodb/${category}_${type}.json"
+              local_count=$(jq '.count // 0' "$local_file" 2>/dev/null || echo 0)
 
-            # 对比远程和本地的 count 数值，若一致则跳过下载
-            if [ "$remote_count" -eq "$local_count" ]; then
-              echo "No update for ${category}. Skipping download."
-              continue
-            else
-              echo "Update detected for ${category}. Downloading all pages..."
-              UPDATED=1
-              # 为当前分类创建临时目录存储下载数据
-              mkdir -p "neodb/${category}"
-              if [ "$pages" -gt 0 ]; then
-                # 循环下载所有页数据
-                for ((i=1; i<=pages; i++)); do
-                  echo "Downloading ${category} page $i"
-                  curl -s -X GET "https://neodb.social/api/me/shelf/complete?category=${category}&page=$i" \
-                    -H "accept: application/json" \
-                    -H "Authorization: Bearer ${{ secrets.NEODB_ACCESS_TOKEN }}" \
-                    -o "neodb/${category}/${category}${i}.json"
-                done
-
-                # 利用 jq 合并所有页面数据为一个 JSON 文件
-                jq -c -s '{
-                  data: map(.data[]) | unique | sort_by(.created_time) | reverse,
-                  pages: (map(.pages)[0]),
-                  count: (map(.count)[0])
-                }' neodb/${category}/*.json > "${category}.json"
-              else
-                # 如果 pages 为 0，则创建默认空数据文件
-                echo '{"data": [], "pages": 0, "count": 0}' > "${category}.json"
+              if [ "$remote_count" -eq "$local_count" ]; then
+                echo "No update for ${category}_${type}"
+                continue
               fi
 
-              # 确保目标目录存在，然后将合并后的 JSON 文件复制过去
-              mkdir -p data/neodb
-              cp -f "${category}.json" "data/neodb/${category}.json"
-            fi
+              UPDATED=1
+              mkdir -p "neodb/${category}_${type}"
+
+              # 批量下载所有分页数据
+              for ((i=1; i<=pages; i++)); do
+                echo "Downloading page $i of ${category}_${type}"
+                curl -s -X GET "https://neodb.social/api/me/shelf/${type}?category=${category}&page=$i" \
+                  -H "accept: application/json" \
+                  -H "Authorization: Bearer ${{ secrets.NEODB_ACCESS_TOKEN }}" \
+                  -o "neodb/${category}_${type}/${category}_${type}${i}.json"
+              done
+
+              # 合并分页数据
+              jq -c -s '{
+                data: map(.data[]) | unique | sort_by(.created_time) | reverse,
+                pages: (map(.pages)[0]),
+                count: (map(.count)[0])
+              }' neodb/${category}_${type}/*.json > "${category}_${type}.json"
+
+              # 保存到 data/neodb 目录
+              cp -f "${category}_${type}.json" "data/neodb/${category}_${type}.json"
+            done
           done
 
-          # 如果所有分类均未更新，则退出工作流
-          if [ $UPDATED -eq 0 ]; then
-            echo "No categories updated. Exiting."
+          # 如果无更新则跳过提交
+          if [ "$UPDATED" -eq 0 ]; then
+            echo "No updates. Exiting."
             exit 0
           fi
 
-      - name: Git Add and Commit
+      - name: Commit and Push
         uses: EndBug/add-and-commit@v9
         with:
-          message: 'chore(data): update neodb data for multiple categories'
+          message: 'chore: update NeoDB shelf data (all types)'
           add: './data/neodb'
