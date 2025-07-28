@@ -59,7 +59,7 @@ jobs:
               remote_count=$(jq '.count // 0' "${category}_${type}1.json")
               pages=$(jq '.pages // 0' "${category}_${type}1.json")
 
-              local_file="data/neodb/${category}_${type}.json"
+              local_file="neodb/${category}_${type}.json"
               local_count=$(jq '.count // 0' "$local_file" 2>/dev/null || echo 0)
 
               if [ "$remote_count" -eq "$local_count" ]; then
