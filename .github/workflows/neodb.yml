@@ -26,7 +26,7 @@ jobs:
 
       - name: Ensure local files exist
         run: |
-          categories=("book" "movie" "tv" "game")
+          categories=("book" "movie" "tv" "game" "album")
           types=("complete" "progress" "wishlist")
           mkdir -p neodb
           for category in "${categories[@]}"; do
@@ -41,7 +41,7 @@ jobs:
 
       - name: Sync all category/type combinations
         run: |
-          categories=("book" "movie" "tv" "game")
+          categories=("book" "movie" "tv" "game" "album")
           types=("complete" "progress" "wishlist")
           UPDATED=0
 
