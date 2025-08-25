@@ -80,11 +80,18 @@ jobs:
               done
 
               # 合并分页数据
-              jq -c -s '{
-                data: map(.data[]) | unique | sort_by(.created_time) | reverse,
-                pages: (map(.pages)[0]),
-                count: (map(.count)[0])
-              }' tmp/neodb/${category}_${type}/*.json > "${category}_${type}.json"
+              json_files=(tmp/neodb/${category}_${type}/*.json)
+              
+              if ls ${json_files[@]} 1> /dev/null 2>&1; then
+                jq -c -s '{
+                  data: map(.data[]) | unique | sort_by(.created_time) | reverse,
+                  pages: (map(.pages)[0]),
+                  count: (map(.count)[0])
+                }' "${json_files[@]}" > "${category}_${type}.json"
+              else
+                echo "No data found for ${category}_${type}, writing empty JSON."
+                echo '{"data": [], "pages": 0, "count": 0}' > "${category}_${type}.json"
+              fi
 
               # 保存到 neodb 目录
               cp -f "${category}_${type}.json" "neodb/${category}_${type}.json"
